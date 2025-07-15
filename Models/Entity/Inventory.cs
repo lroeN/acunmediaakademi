@@ -13,8 +13,7 @@ public class Inventory
     
     public ICollection<Product> Products { get; set; } = new List<Product>();
     
-    // Nested Inventory için eklemeler
-    public Guid? ParentInventoryId { get; set; }  // Eğer null ise bu envanter üst seviye
+    public Guid? ParentInventoryId { get; set; } 
     public Inventory? ParentInventory { get; set; }
     
     public ICollection<Inventory> ChildInventories { get; set; } = new List<Inventory>();

@@ -8,9 +8,9 @@ public class InventoryDto
     public DateTime UpdatedAt { get; set; }
     public string UserId { get; set; }
     
-    public Guid? ParentInventoryId { get; set; }  // Yeni eklendi
+    public Guid? ParentInventoryId { get; set; }
     
-    public List<InventoryDto> ChildInventories { get; set; } = new List<InventoryDto>();  // Recursive
+    public List<InventoryDto> ChildInventories { get; set; } = new List<InventoryDto>();
     
     public List<ProductDto> Products { get; set; }
 }

@@ -58,11 +58,11 @@ public class AppDbContext : IdentityDbContext<AppUser>
             .HasForeignKey(p => p.InventoryId)
             .OnDelete(DeleteBehavior.Cascade);
         
-        // Parent-Child Inventory ilişkisi
+        
         builder.Entity<Inventory>()
             .HasOne(i => i.ParentInventory)
             .WithMany(i => i.ChildInventories)
             .HasForeignKey(i => i.ParentInventoryId)
-            .OnDelete(DeleteBehavior.Restrict); // Döngü önlemek için Restrict koydum
+            .OnDelete(DeleteBehavior.Restrict); // Döngü önlemek için Restrict koyuluyor
     }
 }

@@ -48,13 +48,11 @@ public class AuthController : ControllerBase
             return BadRequest(result.Errors);
 
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-
-        // ✅ Token'ı encode ediyoruz
+        
         var encodedToken = Uri.EscapeDataString(token);
         
         Console.WriteLine($"User ID: {user.Id}");
         
-        // ✅ URL encode edilmiş token ile link oluşturuyoruz
         var confirmationLink = Url.Action(nameof(ConfirmEmail), "Auth",
             new { userId = user.Id, token = encodedToken }, Request.Scheme);
 

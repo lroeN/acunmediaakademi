@@ -57,7 +57,7 @@ public class InventoryController : ControllerBase
         if (string.IsNullOrEmpty(userId))
             return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
 
-        // Sadece en üst seviyedekileri alıyoruz
+        // Çoklu depo GetAll getirme olayı
         var rootInventories = await _context.Inventories
             .Where(i => i.UserId == userId && i.ParentInventoryId == null)
             .Include(i => i.Products)
@@ -178,7 +178,7 @@ public class InventoryController : ControllerBase
             CreatedAt = inventory.CreatedAt,
             UpdatedAt = inventory.UpdatedAt,
             UserId = inventory.UserId,
-            Products = new List<ProductDto>() // Ürünleri ayrıca getirebilirsin
+            Products = new List<ProductDto>()
         };
 
         return Ok(inventoryDto);
