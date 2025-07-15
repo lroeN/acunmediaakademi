@@ -48,8 +48,15 @@ public class AuthController : ControllerBase
             return BadRequest(result.Errors);
 
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+        // ✅ Token'ı encode ediyoruz
+        var encodedToken = Uri.EscapeDataString(token);
+        
+        Console.WriteLine($"User ID: {user.Id}");
+        
+        // ✅ URL encode edilmiş token ile link oluşturuyoruz
         var confirmationLink = Url.Action(nameof(ConfirmEmail), "Auth",
-            new { userId = user.Id, token = token }, Request.Scheme);
+            new { userId = user.Id, token = encodedToken }, Request.Scheme);
 
         await _emailService.SendEmailAsync(
             user.Email!,
@@ -58,20 +65,22 @@ public class AuthController : ControllerBase
 
         return Ok("Registration successful. Please check your email to confirm your account.");
     }
-
+    
     [HttpGet("confirm-email")]
     public async Task<IActionResult> ConfirmEmail(string userId, string token)
     {
+        token = Uri.UnescapeDataString(token); // 👈 BU SATIRI EKLE!
+
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
-            return BadRequest("User not found");
+            return Content("<h2>Kullanıcı bulunamadı.</h2>", "text/html");
 
         var result = await _userManager.ConfirmEmailAsync(user, token);
 
         if (!result.Succeeded)
-            return BadRequest(result.Errors);
+            return Content("<h2>Token geçersiz veya süresi dolmuş.</h2>", "text/html");
 
-        return Ok("Email confirmed successfully");
+        return Content("<h2>Email başarıyla onaylandı!</h2>", "text/html");
     }
 
     [HttpPost("login")]

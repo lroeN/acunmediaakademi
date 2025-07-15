@@ -21,7 +21,7 @@ public class ProductController : ControllerBase
     }
 
     // Belirli bir envanterin ürünlerini getir
-    [HttpGet("{inventoryId}/UrunleriGetir")]
+    [HttpGet("{inventoryId}/ProductsAll")]
     public async Task<IActionResult> GetProductsByInventoryId(Guid inventoryId)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -51,7 +51,7 @@ public class ProductController : ControllerBase
         });
     }
 
-    [HttpPost("Yeni Ürün Ekleme")]
+    [HttpPost("NewProduct")]
     public async Task<IActionResult> AddProduct(ProductCreateDto dto)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -97,7 +97,7 @@ public class ProductController : ControllerBase
     }
 
     // Ürün ID ile getir
-    [HttpGet("{id}/UrunGetir")]
+    [HttpGet("{id}/Products")]
     public async Task<IActionResult> GetProductById(Guid id)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -128,7 +128,7 @@ public class ProductController : ControllerBase
     }
 
     // Ürün güncelle
-    [HttpPut("{id}/UrunGuncelle")]
+    [HttpPut("{id}/ProductUpdate")]
     public async Task<IActionResult> UpdateProduct(Guid id, ProductUpdateDto dto)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -166,7 +166,7 @@ public class ProductController : ControllerBase
     }
 
     // Ürün sil
-    [HttpDelete("{id}/UrunSil")]
+    [HttpDelete("{id}/ProductDelete")]
     public async Task<IActionResult> DeleteProduct(Guid id)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);

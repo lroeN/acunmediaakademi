@@ -43,19 +43,26 @@ public class AppDbContext : IdentityDbContext<AppUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-
+        
         
         builder.Entity<Inventory>()
             .HasOne(i => i.User)
             .WithMany(u => u.Inventories)
             .HasForeignKey(i => i.UserId)
             .OnDelete(DeleteBehavior.Cascade);
-
+        
         
         builder.Entity<Product>()
             .HasOne(p => p.Inventory)
             .WithMany(i => i.Products)
             .HasForeignKey(p => p.InventoryId)
             .OnDelete(DeleteBehavior.Cascade);
+        
+        // Parent-Child Inventory ilişkisi
+        builder.Entity<Inventory>()
+            .HasOne(i => i.ParentInventory)
+            .WithMany(i => i.ChildInventories)
+            .HasForeignKey(i => i.ParentInventoryId)
+            .OnDelete(DeleteBehavior.Restrict); // Döngü önlemek için Restrict koydum
     }
 }

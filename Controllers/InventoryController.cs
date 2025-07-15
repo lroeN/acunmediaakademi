@@ -13,174 +13,194 @@ namespace InventoryManagement.Controllers;
 [Authorize]
 public class InventoryController : ControllerBase
 {
-   private readonly AppDbContext _context;
+    private readonly AppDbContext _context;
 
-   public InventoryController(AppDbContext context)
-   {
-      _context = context;
-   }
-   
-   // Kullanıcının Envanterlerini Listeleme
-   [HttpGet("Kullanıcının Envanterini Listeleme")]
-   public async Task<IActionResult> GetAllInventories()
-   {
-      var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-      if (string.IsNullOrEmpty(userId)) 
-         return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
-      
-      var inventories = await _context.Inventories
-         .Where(i => i.UserId == userId)
-         .Select(i => new InventoryDto
-         {
-            InventoryId = i.InventoryId,
-            Name = i.Name,
-            CreatedAt = i.CreatedAt,
-            UpdatedAt = i.UpdatedAt,
-            UserId = i.UserId,
-            Products = i.Products.Select(p => new ProductDto
+    public InventoryController(AppDbContext context)
+    {
+        _context = context;
+    }
+    
+    private InventoryDto MapInventoryRecursive(Inventory inventory)
+    {
+        return new InventoryDto
+        {
+            InventoryId = inventory.InventoryId,
+            Name = inventory.Name,
+            CreatedAt = inventory.CreatedAt,
+            UpdatedAt = inventory.UpdatedAt,
+            UserId = inventory.UserId,
+            ParentInventoryId = inventory.ParentInventoryId,
+
+            Products = inventory.Products.Select(p => new ProductDto
             {
                 ProductId = p.ProductId,
                 Name = p.Name,
-                Stock = p.Stock
-            }).ToList()
-         })
-         .ToListAsync();
-      
-      return Ok(inventories);
-   }
-   
-   // Yeni Envanter Oluşturma
-   [HttpPost("Envanter Oluşturma")]
-   public async Task<IActionResult> CreateInventory(InventoryCreateDto dto)
-   {
-      var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-      if (string.IsNullOrEmpty(userId)) 
-         return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
+                Stock = p.Stock,
+                InventoryId = p.InventoryId,
+                InventoryName = inventory.Name
+            }).ToList(),
 
-      if (string.IsNullOrWhiteSpace(dto.Name))
-         return BadRequest(new { Message = "Envanter ismi boş olamaz." });
+            ChildInventories = _context.Inventories
+                .Where(c => c.ParentInventoryId == inventory.InventoryId)
+                .Include(c => c.Products)
+                .ToList()
+                .Select(MapInventoryRecursive)
+                .ToList()
+        };
+    }
+    
+    // Kullanıcının Envanterlerini Listeleme
+    [HttpGet("GetAll")]
+    public async Task<IActionResult> GetAllInventories()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
 
-      var inventory = new Inventory
-      {
-         Name = dto.Name,
-         UserId = userId,
-         CreatedAt = DateTime.UtcNow,
-         UpdatedAt = DateTime.UtcNow
-      };
+        // Sadece en üst seviyedekileri alıyoruz
+        var rootInventories = await _context.Inventories
+            .Where(i => i.UserId == userId && i.ParentInventoryId == null)
+            .Include(i => i.Products)
+            .ToListAsync();
 
-      _context.Inventories.Add(inventory);
-      await _context.SaveChangesAsync();
+        var result = rootInventories.Select(MapInventoryRecursive).ToList();
+    
+        return Ok(result);
+    }
 
-      var createdInventory = await _context.Inventories
-         .Include(i => i.Products)
-         .FirstOrDefaultAsync(i => i.InventoryId == inventory.InventoryId);
+    // Yeni Envanter Oluşturma
+    [HttpPost]
+    public async Task<IActionResult> CreateInventory(InventoryCreateDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
 
-      if (createdInventory == null)
-         return NotFound(new { Message = "Envanter oluşturulurken hata oluştu." });
+        if (dto.ParentInventoryId.HasValue)
+        {
+            var parent = await _context.Inventories
+                .FirstOrDefaultAsync(i => i.InventoryId == dto.ParentInventoryId.Value && i.UserId == userId);
 
-      var inventoryDto = new InventoryDto
-      {
-         InventoryId = createdInventory.InventoryId,
-         Name = createdInventory.Name,
-         CreatedAt = createdInventory.CreatedAt,
-         UpdatedAt = createdInventory.UpdatedAt,
-         UserId = createdInventory.UserId,
-         Products = createdInventory.Products.Select(p => new ProductDto
-         {
-            ProductId = p.ProductId,
-            Name = p.Name,
-            Stock = p.Stock
-         }).ToList()
-      };
+            if (parent == null)
+                return BadRequest(new { Message = "Geçersiz üst envanter." });
+        }
 
-      return CreatedAtAction(nameof(GetInventoryById), new { id = inventoryDto.InventoryId }, inventoryDto);
-   }
+        var inventory = new Inventory
+        {
+            Name = dto.Name,
+            UserId = userId,
+            ParentInventoryId = dto.ParentInventoryId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
 
-   // Id'ye göre Envanteri Getir
-   [HttpGet("{id} 'ye Göre Envanteri Getirme")]
-   public async Task<IActionResult> GetInventoryById(Guid id)
-   {
-      var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-      if (string.IsNullOrEmpty(userId)) 
-         return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
+        _context.Inventories.Add(inventory);
+        await _context.SaveChangesAsync();
 
-      var inventory = await _context.Inventories
-         .Include(i => i.Products)
-         .FirstOrDefaultAsync(i => i.InventoryId == id && i.UserId == userId);
+        var inventoryDto = new InventoryDto
+        {
+            InventoryId = inventory.InventoryId,
+            Name = inventory.Name,
+            CreatedAt = inventory.CreatedAt,
+            UpdatedAt = inventory.UpdatedAt,
+            UserId = inventory.UserId,
+            ParentInventoryId = inventory.ParentInventoryId,
+            ChildInventories = new List<InventoryDto>(),
+            Products = new List<ProductDto>()
+        };
 
-      if (inventory == null)
-         return NotFound(new { Message = "Envanter bulunamadı." });
+        return CreatedAtAction(nameof(GetInventoryById), new { id = inventoryDto.InventoryId }, inventoryDto);
+    }
 
-      var inventoryDto = new InventoryDto
-      {
-         InventoryId = inventory.InventoryId,
-         Name = inventory.Name,
-         CreatedAt = inventory.CreatedAt,
-         UpdatedAt = inventory.UpdatedAt,
-         UserId = inventory.UserId,
-         Products = inventory.Products.Select(p => new ProductDto
-         {
-            ProductId = p.ProductId,
-            Name = p.Name,
-            Stock = p.Stock
-         }).ToList()
-      };
+    // Id'ye göre Envanteri Getir
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetInventoryById(Guid id)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
 
-      return Ok(inventoryDto);
-   }
+        var inventory = await _context.Inventories
+            .Include(i => i.Products)
+            .Include(i => i.ChildInventories)
+            .FirstOrDefaultAsync(i => i.InventoryId == id && i.UserId == userId);
 
-   // Envanteri Güncelle
-   [HttpPut("{id} Envanteri Güncelleme")]
-   public async Task<IActionResult> UpdateInventory(Guid id, InventoryUpdateDto dto)
-   {
-      var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-      if (string.IsNullOrEmpty(userId)) 
-         return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
+        if (inventory == null) return NotFound();
 
-      if (string.IsNullOrWhiteSpace(dto.Name))
-         return BadRequest(new { Message = "Envanter ismi boş olamaz." });
+        InventoryDto ToDto(Inventory inv)
+        {
+            return new InventoryDto
+            {
+                InventoryId = inv.InventoryId,
+                Name = inv.Name,
+                CreatedAt = inv.CreatedAt,
+                UpdatedAt = inv.UpdatedAt,
+                UserId = inv.UserId,
+                ParentInventoryId = inv.ParentInventoryId,
+                Products = inv.Products.Select(p => new ProductDto
+                {
+                    ProductId = p.ProductId,
+                    Name = p.Name,
+                    Stock = p.Stock
+                }).ToList(),
+                ChildInventories = inv.ChildInventories.Select(ci => ToDto(ci)).ToList()
+            };
+        }
 
-      var inventory = await _context.Inventories
-         .FirstOrDefaultAsync(i => i.InventoryId == id && i.UserId == userId);
+        var result = ToDto(inventory);
+        return Ok(result);
+    }
 
-      if (inventory == null)
-         return NotFound(new { Message = "Güncellenecek envanter bulunamadı." });
+    // Envanteri Güncelle
+    [HttpPut("{id}/update")]
+    public async Task<IActionResult> UpdateInventory(Guid id, InventoryUpdateDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
 
-      inventory.Name = dto.Name;
-      inventory.UpdatedAt = DateTime.UtcNow;
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            return BadRequest(new { Message = "Envanter ismi boş olamaz." });
 
-      await _context.SaveChangesAsync();
+        var inventory = await _context.Inventories
+            .FirstOrDefaultAsync(i => i.InventoryId == id && i.UserId == userId);
 
-      var inventoryDto = new InventoryDto
-      {
-         InventoryId = inventory.InventoryId,
-         Name = inventory.Name,
-         CreatedAt = inventory.CreatedAt,
-         UpdatedAt = inventory.UpdatedAt,
-         UserId = inventory.UserId,
-         Products = new List<ProductDto>() // Güncelleme sonrası ürünler istenirse ayrıca getirilebilir
-      };
+        if (inventory == null)
+            return NotFound(new { Message = "Güncellenecek envanter bulunamadı." });
 
-      return Ok(inventoryDto);
-   }
+        inventory.Name = dto.Name;
+        inventory.UpdatedAt = DateTime.UtcNow;
 
-   // Envanter Sil
-   [HttpDelete("{id} Kullanarak Envanteri Silme")]
-   public async Task<IActionResult> DeleteInventory(Guid id)
-   {
-      var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-      if (string.IsNullOrEmpty(userId)) 
-         return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
+        await _context.SaveChangesAsync();
 
-      var inventory = await _context.Inventories
-         .FirstOrDefaultAsync(i => i.InventoryId == id && i.UserId == userId);
+        var inventoryDto = new InventoryDto
+        {
+            InventoryId = inventory.InventoryId,
+            Name = inventory.Name,
+            CreatedAt = inventory.CreatedAt,
+            UpdatedAt = inventory.UpdatedAt,
+            UserId = inventory.UserId,
+            Products = new List<ProductDto>() // Ürünleri ayrıca getirebilirsin
+        };
 
-      if (inventory == null)
-         return NotFound(new { Message = "Silinecek envanter bulunamadı." });
+        return Ok(inventoryDto);
+    }
 
-      _context.Inventories.Remove(inventory);
-      await _context.SaveChangesAsync();
+    // Envanter Sil
+    [HttpDelete("{id}/Delete")]
+    public async Task<IActionResult> DeleteInventory(Guid id)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { Message = "Kullanıcı yetkilendirilmemiş." });
 
-      return Ok(new{ Message = "Depo Başıylar Silindi."});
-   }
+        var inventory = await _context.Inventories
+            .FirstOrDefaultAsync(i => i.InventoryId == id && i.UserId == userId);
+
+        if (inventory == null)
+            return NotFound(new { Message = "Silinecek envanter bulunamadı." });
+
+        _context.Inventories.Remove(inventory);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Message = "Depo Başarıyla Silindi." });
+    }
 }
